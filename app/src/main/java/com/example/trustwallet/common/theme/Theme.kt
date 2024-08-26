@@ -1,4 +1,4 @@
-package com.example.trustwallet.ui.theme
+package com.example.trustwallet.common.theme
 
 import android.app.Activity
 import android.os.Build
