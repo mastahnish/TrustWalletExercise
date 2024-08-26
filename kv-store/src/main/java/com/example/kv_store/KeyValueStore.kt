@@ -39,7 +39,7 @@ class KeyValueStore {
                 if (clientId == transactions.last().ownerId) {
                     return true
                 } else {
-                    throw KeyValueStoreContract.AnotherTransactionInProgress()
+                    throw KVException.AnotherTransactionInProgress()
                 }
             }
             return false
@@ -73,7 +73,7 @@ class KeyValueStore {
                     it.apply(inMemoryStore)
                 }
             } catch (e: NoSuchElementException) {
-                throw KeyValueStoreContract.NoPendingTransaction()
+                throw KVException.NoPendingTransaction()
             }
         }
 
@@ -81,7 +81,7 @@ class KeyValueStore {
             try {
                 transactions.removeLast()
             } catch (e: NoSuchElementException) {
-                throw KeyValueStoreContract.NoPendingTransaction()
+                throw KVException.NoPendingTransaction()
             }
         }
 

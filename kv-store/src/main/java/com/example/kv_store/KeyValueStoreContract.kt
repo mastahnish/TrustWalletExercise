@@ -11,7 +11,7 @@ interface KeyValueStoreContract {
                 override fun apply(map: MutableMap<String, String>): CommandResult {
                     map[key] = value
                     return CommandResult.Outcome(
-                        map[key] ?: throw KeyNotSetException()
+                        map[key] ?: throw KVException.KeyNotSetException()
                     )
                 }
             }
@@ -20,7 +20,7 @@ interface KeyValueStoreContract {
                 DataOperationCommand(clientId) {
                 override fun apply(map: MutableMap<String, String>): CommandResult {
                     return CommandResult.Outcome(
-                        map[key] ?: throw KeyNotSetException()
+                        map[key] ?: throw KVException.KeyNotSetException()
                     )
                 }
             }
@@ -58,11 +58,13 @@ interface KeyValueStoreContract {
 
         data class Outcome(val value: String) : CommandResult
     }
+}
 
-    class KeyNotSetException : Exception("key is not set")
+sealed class KVException(message: String) : Exception(message) {
+    class KeyNotSetException : KVException("key is not set")
 
-    class NoPendingTransaction : Exception("no transaction")
+    class NoPendingTransaction : KVException("no transaction")
 
-    class AnotherTransactionInProgress : Exception("another pending transaction")
+    class AnotherTransactionInProgress : KVException("another pending transaction")
 }
 
