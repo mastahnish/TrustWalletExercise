@@ -1,4 +1,4 @@
-package com.example.store
+package com.example.kv_store
 
 interface KeyValueStoreContract {
     sealed class Command(open val clientId: Int) {
@@ -61,8 +61,8 @@ interface KeyValueStoreContract {
 
     class KeyNotSetException : Exception("key is not set")
 
-    class NoPendingTransaction : Exception("there is not pending transaction")
+    class NoPendingTransaction : Exception("no transaction")
 
-    class AnotherTransactionInProgress : Exception("There is another transaction")
+    class AnotherTransactionInProgress : Exception("another pending transaction")
 }
 

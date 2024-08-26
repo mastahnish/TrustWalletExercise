@@ -1,5 +1,5 @@
-import store.KeyValueStore
-import com.example.store.KeyValueStoreContract
+import com.example.kv_store.KeyValueStore
+import com.example.kv_store.KeyValueStoreContract
 import java.util.Scanner
 
 /**
@@ -13,7 +13,7 @@ fun main() {
             print("Command: ")
             val commandString = reader.nextLine()
             val command = parseCommand(commandString)
-            displayResult(keyValueStore.applyCommand(command, 1))
+            displayResult(keyValueStore.applyCommand(command))
         } catch (e: Exception) {
             println(e.message)
             continue
@@ -23,15 +23,16 @@ fun main() {
 
 private fun parseCommand(command: String): KeyValueStoreContract.Command {
     val keyWords = command.split(" ")
+    val clientId = keyWords.getOrNull(3)?.toIntOrNull() ?: 1
 
     return when (keyWords.first()) {
-        "SET" -> KeyValueStoreContract.Command.DataOperationCommand.Set(keyWords[1], keyWords[2], 1)
-        "GET" -> KeyValueStoreContract.Command.DataOperationCommand.Get(keyWords[1], 1)
-        "DELETE" -> KeyValueStoreContract.Command.DataOperationCommand.Delete(keyWords[1], 1)
-        "COUNT" -> KeyValueStoreContract.Command.DataOperationCommand.Count(keyWords[1], 1)
-        "ROLLBACK" -> KeyValueStoreContract.Command.TransactionOperationCommand.Rollback(1)
-        "BEGIN" -> KeyValueStoreContract.Command.TransactionOperationCommand.Begin(1)
-        "COMMIT" -> KeyValueStoreContract.Command.TransactionOperationCommand.Commit(1)
+        "SET" -> KeyValueStoreContract.Command.DataOperationCommand.Set(keyWords[1], keyWords[2],clientId)
+        "GET" -> KeyValueStoreContract.Command.DataOperationCommand.Get(keyWords[1],clientId)
+        "DELETE" -> KeyValueStoreContract.Command.DataOperationCommand.Delete(keyWords[1],clientId)
+        "COUNT" -> KeyValueStoreContract.Command.DataOperationCommand.Count(keyWords[1],clientId)
+        "ROLLBACK" -> KeyValueStoreContract.Command.TransactionOperationCommand.Rollback(clientId)
+        "BEGIN" -> KeyValueStoreContract.Command.TransactionOperationCommand.Begin(clientId)
+        "COMMIT" -> KeyValueStoreContract.Command.TransactionOperationCommand.Commit(clientId)
         else -> {
             throw Exception("WTF is that command?")
         }

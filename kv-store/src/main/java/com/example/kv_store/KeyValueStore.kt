@@ -1,6 +1,4 @@
-package store
-
-import com.example.store.KeyValueStoreContract
+package com.example.kv_store
 
 class KeyValueStore {
 
@@ -10,71 +8,33 @@ class KeyValueStore {
 
     fun applyCommand(
         command: KeyValueStoreContract.Command,
-        clientId: Int
     ): KeyValueStoreContract.CommandResult {
 
         return when (command) {
-            is KeyValueStoreContract.Command.DataOperationCommand.Get -> handleGet(command)
-            is KeyValueStoreContract.Command.DataOperationCommand.Set -> handleSet(command)
-            is KeyValueStoreContract.Command.DataOperationCommand.Delete -> handleDelete(command)
-            is KeyValueStoreContract.Command.DataOperationCommand.Count -> handleCount(command)
-            is KeyValueStoreContract.Command.TransactionOperationCommand.Begin -> handleBegin(
-                clientId
-            )
+            is KeyValueStoreContract.Command.DataOperationCommand -> {
+                return if (transactionStack.checkLock(command.clientId)) {
+                    transactionStack.addCommand(command)
+                } else {
+                    command.apply(inMemoryStore)
+                }
+            }
 
-            is KeyValueStoreContract.Command.TransactionOperationCommand.Commit -> handleCommit()
-            is KeyValueStoreContract.Command.TransactionOperationCommand.Rollback -> handleRollback()
+            is KeyValueStoreContract.Command.TransactionOperationCommand -> {
+                transactionStack.checkLock(command.clientId)
+                transactionStack.handleTransactionOperation(
+                    command
+                )
+                KeyValueStoreContract.CommandResult.Done
+            }
         }
     }
-
-
-    private fun handleSet(command: KeyValueStoreContract.Command.DataOperationCommand.Set): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked(command.clientId)) {
-            transactionStack.addCommand(command)
-        } else {
-            command.apply(inMemoryStore)
-        }
-    }
-
-    private fun handleGet(command: KeyValueStoreContract.Command.DataOperationCommand.Get): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked(command.clientId)) {
-            transactionStack.addCommand(command)
-        } else {
-            command.apply(inMemoryStore)
-        }
-    }
-
-
-    private fun handleDelete(command: KeyValueStoreContract.Command.DataOperationCommand.Delete): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked(command.clientId)) {
-            transactionStack.addCommand(command)
-        } else {
-            command.apply(inMemoryStore)
-        }
-    }
-
-    private fun handleCount(command: KeyValueStoreContract.Command.DataOperationCommand.Count): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked(command.clientId)) {
-            transactionStack.addCommand(command)
-        } else {
-            command.apply(inMemoryStore)
-        }
-    }
-
-    private fun handleRollback(): KeyValueStoreContract.CommandResult =
-        transactionStack.rollbackTransaction().let { KeyValueStoreContract.CommandResult.Done }
-
-    private fun handleBegin(clientId: Int): KeyValueStoreContract.CommandResult =
-        transactionStack.startTransaction(clientId).let { KeyValueStoreContract.CommandResult.Done }
-
-    private fun handleCommit(): KeyValueStoreContract.CommandResult =
-        transactionStack.commitTransaction().let { KeyValueStoreContract.CommandResult.Done }
 
     inner class TransactionStack {
 
         private val transactions = mutableListOf<PendingTransaction>()
 
-        fun isLocked(clientId: Int): Boolean {
+
+        fun checkLock(clientId: Int): Boolean {
             if (transactions.isNotEmpty()) {
                 if (clientId == transactions.last().ownerId) {
                     return true
@@ -85,7 +45,18 @@ class KeyValueStore {
             return false
         }
 
-        fun startTransaction(clientId: Int) {
+        fun handleTransactionOperation(command: KeyValueStoreContract.Command.TransactionOperationCommand) {
+            when (command) {
+                is KeyValueStoreContract.Command.TransactionOperationCommand.Begin -> startTransaction(
+                    command.clientId
+                )
+
+                is KeyValueStoreContract.Command.TransactionOperationCommand.Commit -> commitTransaction()
+                is KeyValueStoreContract.Command.TransactionOperationCommand.Rollback -> rollbackTransaction()
+            }
+        }
+
+        private fun startTransaction(clientId: Int) {
             transactions.add(
                 PendingTransaction(
                     clientId
@@ -93,7 +64,7 @@ class KeyValueStore {
             )
         }
 
-        fun commitTransaction() {
+        private fun commitTransaction() {
             try {
                 transactions.last().commit()
             } catch (e: PendingTransaction.NoParentTransaction) {
@@ -106,7 +77,7 @@ class KeyValueStore {
             }
         }
 
-        fun rollbackTransaction() {
+        private fun rollbackTransaction() {
             try {
                 transactions.removeLast()
             } catch (e: NoSuchElementException) {
