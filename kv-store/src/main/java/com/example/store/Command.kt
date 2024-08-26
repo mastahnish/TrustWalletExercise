@@ -1,12 +1,13 @@
 package store
 
 interface KeyValueStoreContract {
-    sealed interface Command {
+    sealed class Command(open val clientId: Int) {
 
-        sealed interface DataOperationCommand : Command {
-            fun apply(map: MutableMap<String, String>): CommandResult
+        sealed class DataOperationCommand(clientId: Int) : Command(clientId) {
+            abstract fun apply(map: MutableMap<String, String>): CommandResult
 
-            data class Set(val key: String, val value: String) : DataOperationCommand {
+            data class Set(val key: String, val value: String, override val clientId: Int) :
+                DataOperationCommand(clientId) {
                 override fun apply(map: MutableMap<String, String>): CommandResult {
                     map[key] = value
                     return CommandResult.Outcome(
@@ -15,7 +16,8 @@ interface KeyValueStoreContract {
                 }
             }
 
-            data class Get(val key: String) : DataOperationCommand {
+            data class Get(val key: String, override val clientId: Int) :
+                DataOperationCommand(clientId) {
                 override fun apply(map: MutableMap<String, String>): CommandResult {
                     return CommandResult.Outcome(
                         map[key] ?: throw KeyNotSetException()
@@ -23,14 +25,16 @@ interface KeyValueStoreContract {
                 }
             }
 
-            data class Delete(val key: String) : DataOperationCommand {
+            data class Delete(val key: String, override val clientId: Int) :
+                DataOperationCommand(clientId) {
                 override fun apply(map: MutableMap<String, String>): CommandResult {
                     map.remove(key)
                     return CommandResult.Done
                 }
             }
 
-            data class Count(val value: String) : DataOperationCommand {
+            data class Count(val value: String, override val clientId: Int) :
+                DataOperationCommand(clientId) {
                 override fun apply(map: MutableMap<String, String>): CommandResult {
                     val count = map.values.filter { it == value }.size
                     return CommandResult.Outcome(count.toString())
@@ -38,12 +42,13 @@ interface KeyValueStoreContract {
             }
         }
 
-        sealed interface TransactionOperationCommand : Command {
-            data object Begin : TransactionOperationCommand
+        sealed class TransactionOperationCommand(clientId: Int) : Command(clientId) {
+            data class Begin(override val clientId: Int) : TransactionOperationCommand(clientId)
 
-            data object Commit : TransactionOperationCommand
+            data class Commit(override val clientId: Int) : TransactionOperationCommand(clientId)
 
-            data object Rollback : TransactionOperationCommand
+            data class Rollback(override val clientId: Int) :
+                TransactionOperationCommand(clientId)
         }
 
     }
@@ -59,7 +64,5 @@ interface KeyValueStoreContract {
     class NoPendingTransaction : Exception("there is not pending transaction")
 
     class AnotherTransactionInProgress : Exception("There is another transaction")
-
-    class UnknownException(val notHandledException: Exception) : Exception()
 }
 

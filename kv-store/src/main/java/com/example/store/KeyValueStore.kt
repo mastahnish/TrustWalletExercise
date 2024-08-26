@@ -9,19 +9,25 @@ class KeyValueStore {
     fun applyCommand(
         command: KeyValueStoreContract.Command,
         clientId: Int
-    ): KeyValueStoreContract.CommandResult =
-        when (command) {
+    ): KeyValueStoreContract.CommandResult {
+
+        return when (command) {
             is KeyValueStoreContract.Command.DataOperationCommand.Get -> handleGet(command)
             is KeyValueStoreContract.Command.DataOperationCommand.Set -> handleSet(command)
             is KeyValueStoreContract.Command.DataOperationCommand.Delete -> handleDelete(command)
             is KeyValueStoreContract.Command.DataOperationCommand.Count -> handleCount(command)
-            is KeyValueStoreContract.Command.TransactionOperationCommand.Begin -> handleBegin()
+            is KeyValueStoreContract.Command.TransactionOperationCommand.Begin -> handleBegin(
+                clientId
+            )
+
             is KeyValueStoreContract.Command.TransactionOperationCommand.Commit -> handleCommit()
             is KeyValueStoreContract.Command.TransactionOperationCommand.Rollback -> handleRollback()
         }
+    }
+
 
     private fun handleSet(command: KeyValueStoreContract.Command.DataOperationCommand.Set): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked()) {
+        return if (transactionStack.isLocked(command.clientId)) {
             transactionStack.addCommand(command)
         } else {
             command.apply(inMemoryStore)
@@ -29,7 +35,7 @@ class KeyValueStore {
     }
 
     private fun handleGet(command: KeyValueStoreContract.Command.DataOperationCommand.Get): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked()) {
+        return if (transactionStack.isLocked(command.clientId)) {
             transactionStack.addCommand(command)
         } else {
             command.apply(inMemoryStore)
@@ -38,7 +44,7 @@ class KeyValueStore {
 
 
     private fun handleDelete(command: KeyValueStoreContract.Command.DataOperationCommand.Delete): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked()) {
+        return if (transactionStack.isLocked(command.clientId)) {
             transactionStack.addCommand(command)
         } else {
             command.apply(inMemoryStore)
@@ -46,7 +52,7 @@ class KeyValueStore {
     }
 
     private fun handleCount(command: KeyValueStoreContract.Command.DataOperationCommand.Count): KeyValueStoreContract.CommandResult {
-        return if (transactionStack.isLocked()) {
+        return if (transactionStack.isLocked(command.clientId)) {
             transactionStack.addCommand(command)
         } else {
             command.apply(inMemoryStore)
@@ -56,26 +62,32 @@ class KeyValueStore {
     private fun handleRollback(): KeyValueStoreContract.CommandResult =
         transactionStack.rollbackTransaction().let { KeyValueStoreContract.CommandResult.Done }
 
-    private fun handleBegin(): KeyValueStoreContract.CommandResult =
-        transactionStack.startTransaction().let { KeyValueStoreContract.CommandResult.Done }
+    private fun handleBegin(clientId: Int): KeyValueStoreContract.CommandResult =
+        transactionStack.startTransaction(clientId).let { KeyValueStoreContract.CommandResult.Done }
 
     private fun handleCommit(): KeyValueStoreContract.CommandResult =
         transactionStack.commitTransaction().let { KeyValueStoreContract.CommandResult.Done }
-
-
-    private fun applyInternally(command: KeyValueStoreContract.Command, sessionId: Int) {
-        applyCommand(command, sessionId)
-    }
 
     inner class TransactionStack {
 
         private val transactions = mutableListOf<PendingTransaction>()
 
-        fun isLocked(): Boolean = transactions.isNotEmpty()
+        fun isLocked(clientId: Int): Boolean {
+            if (transactions.isNotEmpty()) {
+                if (clientId == transactions.last().ownerId) {
+                    return true
+                } else {
+                    throw KeyValueStoreContract.AnotherTransactionInProgress()
+                }
+            }
+            return false
+        }
 
-        fun startTransaction() {
+        fun startTransaction(clientId: Int) {
             transactions.add(
-                PendingTransaction()
+                PendingTransaction(
+                    clientId
+                )
             )
         }
 
@@ -85,8 +97,10 @@ class KeyValueStore {
             } catch (e: PendingTransaction.NoParentTransaction) {
                 val transaction = transactions.removeLast()
                 transaction.pendingCommands.forEach {
-                    applyInternally(it, 0)
+                    it.apply(inMemoryStore)
                 }
+            } catch (e: NoSuchElementException) {
+                throw KeyValueStoreContract.NoPendingTransaction()
             }
         }
 
@@ -114,7 +128,9 @@ class KeyValueStore {
             return command.apply(localCopy)
         }
 
-        inner class PendingTransaction {
+        inner class PendingTransaction(
+            val ownerId: Int
+        ) {
             val pendingCommands: MutableList<KeyValueStoreContract.Command.DataOperationCommand> =
                 mutableListOf()
 
