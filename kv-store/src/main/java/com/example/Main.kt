@@ -1,5 +1,5 @@
 import store.KeyValueStore
-import store.KeyValueStoreContract
+import com.example.store.KeyValueStoreContract
 import java.util.Scanner
 
 /**

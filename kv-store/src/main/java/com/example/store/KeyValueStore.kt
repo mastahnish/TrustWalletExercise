@@ -1,5 +1,7 @@
 package store
 
+import com.example.store.KeyValueStoreContract
+
 class KeyValueStore {
 
     private val inMemoryStore = mutableMapOf<String, String>()

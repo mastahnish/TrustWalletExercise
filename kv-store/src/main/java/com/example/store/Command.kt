@@ -1,4 +1,4 @@
-package store
+package com.example.store
 
 interface KeyValueStoreContract {
     sealed class Command(open val clientId: Int) {
