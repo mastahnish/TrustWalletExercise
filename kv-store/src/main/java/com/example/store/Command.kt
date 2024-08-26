@@ -2,19 +2,50 @@ package store
 
 interface KeyValueStoreContract {
     sealed interface Command {
-        data class Set(val key: String, val value: String) : Command
 
-        data class Get(val key: String) : Command
+        sealed interface DataOperationCommand : Command {
+            fun apply(map: MutableMap<String, String>): CommandResult
 
-        data class Delete(val key: String) : Command
+            data class Set(val key: String, val value: String) : DataOperationCommand {
+                override fun apply(map: MutableMap<String, String>): CommandResult {
+                    map[key] = value
+                    return CommandResult.Outcome(
+                        map[key] ?: throw KeyNotSetException()
+                    )
+                }
+            }
 
-        data class Count(val value: String) : Command
+            data class Get(val key: String) : DataOperationCommand {
+                override fun apply(map: MutableMap<String, String>): CommandResult {
+                    return CommandResult.Outcome(
+                        map[key] ?: throw KeyNotSetException()
+                    )
+                }
+            }
 
-        data object Begin : Command
+            data class Delete(val key: String) : DataOperationCommand {
+                override fun apply(map: MutableMap<String, String>): CommandResult {
+                    map.remove(key)
+                    return CommandResult.Done
+                }
+            }
 
-        data object Commit : Command
+            data class Count(val value: String) : DataOperationCommand {
+                override fun apply(map: MutableMap<String, String>): CommandResult {
+                    val count = map.values.filter { it == value }.size
+                    return CommandResult.Outcome(count.toString())
+                }
+            }
+        }
 
-        data object Rollback : Command
+        sealed interface TransactionOperationCommand : Command {
+            data object Begin : TransactionOperationCommand
+
+            data object Commit : TransactionOperationCommand
+
+            data object Rollback : TransactionOperationCommand
+        }
+
     }
 
     sealed interface CommandResult {

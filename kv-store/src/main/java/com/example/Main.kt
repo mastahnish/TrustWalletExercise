@@ -11,7 +11,12 @@ fun main() {
     while (true) {
         print("Command: ")
         val commandString = reader.nextLine()
-        val command = parseCommand(commandString)
+        val command = try {
+            parseCommand(commandString)
+        } catch (e: Exception) {
+            println(e.message)
+            continue
+        }
         displayResult(keyValueStore.applyCommand(command, 1))
     }
 }
@@ -20,12 +25,15 @@ private fun parseCommand(command: String): KeyValueStoreContract.Command {
     val keyWords = command.split(" ")
 
     return when (keyWords.first()) {
-        "SET" -> KeyValueStoreContract.Command.Set(keyWords[1], keyWords[2])
-        "GET" -> KeyValueStoreContract.Command.Get(keyWords[1])
-        "DELETE" -> KeyValueStoreContract.Command.Delete(keyWords[1])
-        "COUNT" -> KeyValueStoreContract.Command.Count(keyWords[1])
+        "SET" -> KeyValueStoreContract.Command.DataOperationCommand.Set(keyWords[1], keyWords[2])
+        "GET" -> KeyValueStoreContract.Command.DataOperationCommand.Get(keyWords[1])
+        "DELETE" -> KeyValueStoreContract.Command.DataOperationCommand.Delete(keyWords[1])
+        "COUNT" -> KeyValueStoreContract.Command.DataOperationCommand.Count(keyWords[1])
+        "ROLLBACK" -> KeyValueStoreContract.Command.TransactionOperationCommand.Rollback
+        "BEGIN" -> KeyValueStoreContract.Command.TransactionOperationCommand.Begin
+        "COMMIT" -> KeyValueStoreContract.Command.TransactionOperationCommand.Commit
         else -> {
-            KeyValueStoreContract.Command.Get("")
+            throw Exception("WTF is that command?")
         }
     }
 }

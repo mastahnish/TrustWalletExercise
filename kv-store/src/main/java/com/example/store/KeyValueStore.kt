@@ -6,68 +6,62 @@ class KeyValueStore {
 
     private val transactionStack = TransactionStack()
 
-    fun applyCommand(command: KeyValueStoreContract.Command, sessionId: Int): KeyValueStoreContract.CommandResult =
+    fun applyCommand(
+        command: KeyValueStoreContract.Command,
+        clientId: Int
+    ): KeyValueStoreContract.CommandResult =
         when (command) {
-            is KeyValueStoreContract.Command.Get -> handleGet(command)
-            is KeyValueStoreContract.Command.Set -> handleSet(command)
-            is KeyValueStoreContract.Command.Delete -> handleDelete(command)
-            is KeyValueStoreContract.Command.Count -> handleCount(command)
-            KeyValueStoreContract.Command.Begin -> TODO()
-            KeyValueStoreContract.Command.Commit -> TODO()
-            KeyValueStoreContract.Command.Rollback -> TODO()
+            is KeyValueStoreContract.Command.DataOperationCommand.Get -> handleGet(command)
+            is KeyValueStoreContract.Command.DataOperationCommand.Set -> handleSet(command)
+            is KeyValueStoreContract.Command.DataOperationCommand.Delete -> handleDelete(command)
+            is KeyValueStoreContract.Command.DataOperationCommand.Count -> handleCount(command)
+            is KeyValueStoreContract.Command.TransactionOperationCommand.Begin -> handleBegin()
+            is KeyValueStoreContract.Command.TransactionOperationCommand.Commit -> handleCommit()
+            is KeyValueStoreContract.Command.TransactionOperationCommand.Rollback -> handleRollback()
         }
 
-    private fun handleSet(command: KeyValueStoreContract.Command.Set): KeyValueStoreContract.CommandResult {
+    private fun handleSet(command: KeyValueStoreContract.Command.DataOperationCommand.Set): KeyValueStoreContract.CommandResult {
         return if (transactionStack.isLocked()) {
-            transactionStack.applyCommand(command)
+            transactionStack.addCommand(command)
         } else {
-            inMemoryStore[command.key] = command.value
-            KeyValueStoreContract.CommandResult.Outcome(
-                inMemoryStore[command.key] ?: throw KeyValueStoreContract.KeyNotSetException()
-            )
+            command.apply(inMemoryStore)
         }
     }
 
-    private fun handleGet(command: KeyValueStoreContract.Command.Get): KeyValueStoreContract.CommandResult {
+    private fun handleGet(command: KeyValueStoreContract.Command.DataOperationCommand.Get): KeyValueStoreContract.CommandResult {
         return if (transactionStack.isLocked()) {
-            transactionStack.applyCommand(command)
+            transactionStack.addCommand(command)
         } else {
-            KeyValueStoreContract.CommandResult.Outcome(
-                inMemoryStore[command.key] ?: throw KeyValueStoreContract.KeyNotSetException()
-            )
+            command.apply(inMemoryStore)
         }
     }
 
 
-    private fun handleDelete(command: KeyValueStoreContract.Command.Delete): KeyValueStoreContract.CommandResult {
+    private fun handleDelete(command: KeyValueStoreContract.Command.DataOperationCommand.Delete): KeyValueStoreContract.CommandResult {
         return if (transactionStack.isLocked()) {
-            transactionStack.applyCommand(command)
+            transactionStack.addCommand(command)
         } else {
-            inMemoryStore.remove(command.key)
-            return KeyValueStoreContract.CommandResult.Done
+            command.apply(inMemoryStore)
         }
     }
 
-    private fun handleCount(command: KeyValueStoreContract.Command.Count): KeyValueStoreContract.CommandResult {
+    private fun handleCount(command: KeyValueStoreContract.Command.DataOperationCommand.Count): KeyValueStoreContract.CommandResult {
         return if (transactionStack.isLocked()) {
-            transactionStack.applyCommand(command)
+            transactionStack.addCommand(command)
         } else {
-            val count = inMemoryStore.values.filter { it == command.value }.size
-            return KeyValueStoreContract.CommandResult.Outcome(count.toString())
+            command.apply(inMemoryStore)
         }
     }
 
-    private fun handleRollback(command: KeyValueStoreContract.Command.Rollback): KeyValueStoreContract.CommandResult {
-        TODO()
-    }
+    private fun handleRollback(): KeyValueStoreContract.CommandResult =
+        transactionStack.rollbackTransaction().let { KeyValueStoreContract.CommandResult.Done }
 
-    private fun handleBegin(command: KeyValueStoreContract.Command.Begin): KeyValueStoreContract.CommandResult {
-        TODO()
-    }
+    private fun handleBegin(): KeyValueStoreContract.CommandResult =
+        transactionStack.startTransaction().let { KeyValueStoreContract.CommandResult.Done }
 
-    private fun handleCommit(command: KeyValueStoreContract.Command.Commit): KeyValueStoreContract.CommandResult {
-        TODO()
-    }
+    private fun handleCommit(): KeyValueStoreContract.CommandResult =
+        transactionStack.commitTransaction().let { KeyValueStoreContract.CommandResult.Done }
+
 
     private fun applyInternally(command: KeyValueStoreContract.Command, sessionId: Int) {
         applyCommand(command, sessionId)
@@ -96,18 +90,33 @@ class KeyValueStore {
             }
         }
 
-        fun applyCommand(command: KeyValueStoreContract.Command): KeyValueStoreContract.CommandResult {
-            transactions.last().pendingCommands.add(command)
-            return calculateResult(command)
+        fun rollbackTransaction() {
+            try {
+                transactions.removeLast()
+            } catch (e: NoSuchElementException) {
+                throw KeyValueStoreContract.NoPendingTransaction()
+            }
         }
 
-        private fun calculateResult(command: KeyValueStoreContract.Command): KeyValueStoreContract.CommandResult.Done {
-            val localCopy = inMemoryStore.toMap()
-            return KeyValueStoreContract.CommandResult.Done
+        fun addCommand(command: KeyValueStoreContract.Command.DataOperationCommand): KeyValueStoreContract.CommandResult {
+            val simulatedResult = runLocally(command)
+            transactions.last().pendingCommands.add(command)
+            return simulatedResult
+        }
+
+        private fun runLocally(command: KeyValueStoreContract.Command.DataOperationCommand): KeyValueStoreContract.CommandResult {
+            val localCopy = inMemoryStore.toMutableMap()
+            transactions.forEach { transaction ->
+                transaction.pendingCommands.forEach { transactionCommand ->
+                    transactionCommand.apply(localCopy)
+                }
+            }
+            return command.apply(localCopy)
         }
 
         inner class PendingTransaction {
-            val pendingCommands: MutableList<KeyValueStoreContract.Command> = mutableListOf()
+            val pendingCommands: MutableList<KeyValueStoreContract.Command.DataOperationCommand> =
+                mutableListOf()
 
             fun commit() {
                 try {
