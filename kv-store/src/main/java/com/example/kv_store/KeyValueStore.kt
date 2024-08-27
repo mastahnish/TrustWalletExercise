@@ -8,7 +8,7 @@ class KeyValueStore {
 
     fun applyCommand(
         command: KeyValueStoreContract.Command,
-    ): KeyValueStoreContract.CommandResult {
+    ): KeyValueStoreContract.CommandResult = synchronized(this) {
 
         return when (command) {
             is KeyValueStoreContract.Command.DataOperationCommand -> {
@@ -34,7 +34,7 @@ class KeyValueStore {
         private val transactions = mutableListOf<PendingTransaction>()
 
 
-        fun checkLock(clientId: Int): Boolean {
+        fun checkLock(clientId: Int): Boolean = synchronized(this) {
             if (transactions.isNotEmpty()) {
                 if (clientId == transactions.last().ownerId) {
                     return true
@@ -45,7 +45,7 @@ class KeyValueStore {
             return false
         }
 
-        fun handleTransactionOperation(command: KeyValueStoreContract.Command.TransactionOperationCommand) {
+        fun handleTransactionOperation(command: KeyValueStoreContract.Command.TransactionOperationCommand) = synchronized(this) {
             when (command) {
                 is KeyValueStoreContract.Command.TransactionOperationCommand.Begin -> startTransaction(
                     command.clientId
