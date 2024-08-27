@@ -3,6 +3,7 @@ package com.example.trustwallet.feature.presentation
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -47,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.example.trustwallet.common.theme.TrustWalletTheme
 import org.koin.androidx.compose.koinViewModel
 
@@ -59,7 +62,9 @@ fun CommandsScreen() {
         viewModel::onParameter1Change,
         viewModel::onParameter2Change,
         viewModel::onCommandMenuClicked,
-        viewModel::onCommandSubmit
+        viewModel::onCommandMenuHide,
+        viewModel::onCommandMenuItemClicked,
+        viewModel::onCommandSubmit,
     )
 }
 
@@ -70,6 +75,8 @@ fun CommandsScreenContent(
     onParameter1Change: (String) -> Unit,
     onParameter2Change: (String) -> Unit,
     onCommandMenuClicked: () -> Unit,
+    onCommandMenuHide: () -> Unit,
+    onCommandMenuItemClicked: (CommandMenuItem) -> Unit,
     onCommandSubmit: () -> Unit
 ) {
     Scaffold(
@@ -114,9 +121,11 @@ fun CommandsScreenContent(
                             label = "Param 2",
                             modifier = Modifier.weight(1f)
                         )
+                    if (!viewState.isParameter1Visible && !viewState.isParameter2Visible)
+                        Spacer(modifier = Modifier.weight(1f))
                     FloatingActionButton(
                         elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                        onClick = { },
+                        onClick = { onCommandSubmit() },
                         modifier = Modifier
                             .width(48.dp)
                             .aspectRatio(1f, matchHeightConstraintsFirst = true)
@@ -124,11 +133,18 @@ fun CommandsScreenContent(
                         Icon(imageVector = Icons.AutoMirrored.Default.Send, contentDescription = "")
                     }
                 }
-
             }
         },
         modifier = Modifier.imePadding()
     ) { contentPadding ->
+        if (viewState.showCommandMenu) {
+            CommandMenuItemDialog(
+                onDismissRequest = { onCommandMenuHide() },
+                onItemChosen = { onCommandMenuItemClicked(it) },
+                items = viewState.availableCommandItems,
+                dialogTitle = "Choose a command"
+            )
+        }
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -136,7 +152,7 @@ fun CommandsScreenContent(
                 .padding(contentPadding),
         ) {
             items(viewState.commands) { command ->
-                Command(
+                CommandItem(
                     text = command.first,
                     isUser = command.second,
                 )
@@ -148,7 +164,7 @@ fun CommandsScreenContent(
 }
 
 @Composable
-fun Command(
+fun CommandItem(
     text: String,
     isUser: Boolean = false,
     error: String? = null
@@ -233,6 +249,42 @@ fun InputTextField(
     }
 }
 
+@Composable
+fun CommandMenuItemDialog(
+    onDismissRequest: () -> Unit,
+    onItemChosen: (CommandMenuItem) -> Unit,
+    items: List<CommandMenuItem>,
+    dialogTitle: String,
+) {
+    Dialog(
+        onDismissRequest = {
+            onDismissRequest()
+        }
+    ) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 20.dp)
+            ) {
+                Text(text = dialogTitle, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                items.forEach { item ->
+                    Text(
+                        item.name,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onItemChosen(item) }
+                            .padding(16.dp)
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
 @Preview(showSystemUi = true)
 @Composable
 private fun Preview() {
@@ -244,12 +296,15 @@ private fun Preview() {
                     "value" to false,
                     "BEGIN" to true,
                     "GET test" to true,
-                )
+                ),
+                showCommandMenu = true
             ),
             onParameter1Change = {},
             onParameter2Change = {},
             onCommandMenuClicked = {},
-            onCommandSubmit = {}
+            onCommandSubmit = {},
+            onCommandMenuItemClicked = {},
+            onCommandMenuHide = {}
         )
     }
 }
@@ -258,7 +313,7 @@ private fun Preview() {
 @Composable
 private fun CommmandItemPreview() {
     TrustWalletTheme {
-        Command(
+        CommandItem(
             text = "SET foo 123",
             isUser = true,
             error = "Error occurred!"

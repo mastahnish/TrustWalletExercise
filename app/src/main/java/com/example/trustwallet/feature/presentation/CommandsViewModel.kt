@@ -1,10 +1,14 @@
 package com.example.trustwallet.feature.presentation
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.trustwallet.feature.domain.Command
 import com.example.trustwallet.feature.domain.usecase.ApplyCommandUseCase
+import com.example.trustwallet.feature.domain.usecase.invoke
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class CommandsViewModel(
     private val applyCommandUseCase: ApplyCommandUseCase
@@ -25,10 +29,59 @@ class CommandsViewModel(
     }
 
     fun onCommandMenuClicked() {
+        _state.update {
+            it.copy(showCommandMenu = true)
+        }
+    }
 
+    fun onCommandMenuItemClicked(commandMenuItem: CommandMenuItem) {
+        _state.update {
+            it.copy(
+                chosenCommand = commandMenuItem,
+                showCommandMenu = false,
+                parameter2 = "",
+                parameter1 = "",
+                isParameter1Visible = commandMenuItem.numOfParameters >= 1,
+                isParameter2Visible = commandMenuItem.numOfParameters >= 2
+            )
+        }
+        onCommandMenuHide()
+    }
+
+    fun onCommandMenuHide() {
+        _state.update {
+            it.copy(showCommandMenu = false)
+        }
     }
 
     fun onCommandSubmit() {
+        viewModelScope.launch {
+            applyCommandUseCase.invoke(
+                with(state.value) {
+                    when (chosenCommand) {
+                        CommandMenuItem.SET -> Command.Set(
+                            key = parameter1,
+                            value = parameter2
+                        )
 
+                        CommandMenuItem.GET -> Command.Get(
+                            key = parameter1
+                        )
+
+                        CommandMenuItem.DELETE -> Command.Delete(
+                            key = parameter1
+                        )
+
+                        CommandMenuItem.COUNT -> Command.Count(
+                            key = parameter1
+                        )
+
+                        CommandMenuItem.ROLLBACK -> Command.Rollback
+                        CommandMenuItem.BEGIN -> Command.Begin
+                        CommandMenuItem.COMMIT -> Command.Commit
+                    }
+                }
+            )
+        }
     }
 }

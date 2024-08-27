@@ -11,6 +11,12 @@ data class CommandsViewState(
     val showCommandMenu: Boolean = false
 )
 
-enum class CommandMenuItem {
-    SET, GET, DELETE, COUNT, ROLLBACK, BEGIN, COMMIT
+enum class CommandMenuItem(val numOfParameters: Int) {
+    SET(2),
+    GET(1),
+    DELETE(1),
+    COUNT(1),
+    BEGIN(0),
+    COMMIT(0),
+    ROLLBACK(0)
 }
