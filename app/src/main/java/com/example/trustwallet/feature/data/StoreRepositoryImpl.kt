@@ -4,27 +4,71 @@ import com.example.kv_store.KVException
 import com.example.kv_store.KeyValueStore
 import com.example.kv_store.KeyValueStoreContract
 import com.example.trustwallet.feature.domain.Command
+import com.example.trustwallet.feature.domain.CommandMessage
+import com.example.trustwallet.feature.domain.StoreRepository
 import com.example.trustwallet.feature.domain.usecase.ApplyCommandUseCase
 import com.example.trustwallet.feature.domain.usecase.CommandUseCaseResult
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlin.random.Random
 
 class StoreRepositoryImpl(
     private val keyValueStore: KeyValueStore
-) : ApplyCommandUseCase {
+) : ApplyCommandUseCase, StoreRepository {
     private val clientId: Int = Random.nextInt()
 
-    override fun applyCommand(command: Command): CommandUseCaseResult {
-        return try {
+    private val commandsHistory: MutableList<CommandMessage> = mutableListOf()
+
+    private val commandsHistoryFlow = MutableSharedFlow<List<CommandMessage>>(
+        replay = 1,
+        extraBufferCapacity = 1,
+    )
+
+    override fun observeCommandsHistory(): Flow<List<CommandMessage>> {
+        commandsHistoryFlow.tryEmit(commandsHistory)
+        return commandsHistoryFlow
+    }
+
+    override fun applyCommand(command: Command) {
+        try {
             val kvCommand = parseCommand(command)
-            val result = keyValueStore.applyCommand(kvCommand)
-            when (result) {
+            doAndNotify {
+                commandsHistory.add(
+                    CommandMessage(
+                        text = command.toString(),
+                        isUser = true
+                    )
+                )
+            }
+            when (val result = keyValueStore.applyCommand(kvCommand)) {
                 is KeyValueStoreContract.CommandResult.Done -> CommandUseCaseResult.Success
-                is KeyValueStoreContract.CommandResult.Outcome -> CommandUseCaseResult.Output(result.value)
+                is KeyValueStoreContract.CommandResult.Outcome -> doAndNotify {
+                    commandsHistory.add(
+                        CommandMessage(
+                            text = result.value,
+                            isUser = false,
+                        )
+                    )
+                }
             }
         } catch (e: KVException) {
-            CommandUseCaseResult.Failure(e.message.orEmpty())
+            handleFailure(e.message.orEmpty())
         } catch (e: Exception) {
-            CommandUseCaseResult.Failure("unknown error")
+            handleFailure("unknown error")
+        }
+    }
+
+    private fun doAndNotify(block: (List<CommandMessage>) -> Unit) {
+        block(commandsHistory)
+        commandsHistoryFlow.tryEmit(commandsHistory)
+    }
+
+    private fun handleFailure(error: String) = doAndNotify {
+        val lastMessage = commandsHistory.removeLastOrNull()
+        lastMessage?.let {
+            lastMessage.copy(error = error).also {
+                commandsHistory.add(it)
+            }
         }
     }
 

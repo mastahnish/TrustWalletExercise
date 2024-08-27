@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.trustwallet.feature.domain.Command
 import com.example.trustwallet.feature.domain.usecase.ApplyCommandUseCase
+import com.example.trustwallet.feature.domain.usecase.ObserveCommandsHistoryUseCase
 import com.example.trustwallet.feature.domain.usecase.invoke
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,10 +12,23 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class CommandsViewModel(
-    private val applyCommandUseCase: ApplyCommandUseCase
+    private val applyCommandUseCase: ApplyCommandUseCase,
+    private val observeCommandsHistoryUseCase: ObserveCommandsHistoryUseCase
 ) : ViewModel() {
     private val _state by lazy { MutableStateFlow(CommandsViewState()) }
     val state = _state.asStateFlow()
+
+    fun onStart() {
+        viewModelScope.launch {
+            observeCommandsHistoryUseCase.invoke().collect { commands ->
+                _state.update {
+                    it.copy(
+                        commands = commands.toList(),
+                    )
+                }
+            }
+        }
+    }
 
     fun onParameter1Change(text: String) {
         _state.update {
@@ -41,8 +55,6 @@ class CommandsViewModel(
                 showCommandMenu = false,
                 parameter2 = "",
                 parameter1 = "",
-                isParameter1Visible = commandMenuItem.numOfParameters >= 1,
-                isParameter2Visible = commandMenuItem.numOfParameters >= 2
             )
         }
         onCommandMenuHide()
@@ -81,6 +93,16 @@ class CommandsViewModel(
                         CommandMenuItem.COMMIT -> Command.Commit
                     }
                 }
+            )
+        }
+        clearParameters()
+    }
+
+    private fun clearParameters() {
+        _state.update {
+            it.copy(
+                parameter1 = "",
+                parameter2 = ""
             )
         }
     }

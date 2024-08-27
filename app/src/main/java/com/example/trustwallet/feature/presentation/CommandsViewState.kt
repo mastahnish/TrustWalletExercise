@@ -1,15 +1,19 @@
 package com.example.trustwallet.feature.presentation
 
+import com.example.trustwallet.feature.domain.CommandMessage
+
 data class CommandsViewState(
-    val commands: List<Pair<String, Boolean>> = emptyList(),
+    val commands: List<CommandMessage> = emptyList(),
     val chosenCommand: CommandMenuItem = CommandMenuItem.GET,
     val availableCommandItems: List<CommandMenuItem> = CommandMenuItem.entries,
     val parameter1: String = "",
-    val isParameter1Visible: Boolean = true,
     val parameter2: String = "",
-    val isParameter2Visible: Boolean = true,
     val showCommandMenu: Boolean = false
-)
+){
+    fun isParameter1Visible() = chosenCommand.numOfParameters >= 1
+
+    fun isParameter2Visible() = chosenCommand.numOfParameters >= 2
+}
 
 enum class CommandMenuItem(val numOfParameters: Int) {
     SET(2),

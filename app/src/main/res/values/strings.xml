@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">TrustWallet</string>
+    <string name="choose_a_command">Choose a command</string>
+    <string name="param_2">Param 2</string>
+    <string name="param_1">Param 1</string>
+    <string name="app_title">Simple Transactional Key Value Store APP</string>
 </resources>

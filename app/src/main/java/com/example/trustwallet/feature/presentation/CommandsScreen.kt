@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text2.BasicTextField2
 import androidx.compose.foundation.text2.input.TextFieldLineLimits
@@ -40,23 +41,46 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.example.trustwallet.R
 import com.example.trustwallet.common.theme.TrustWalletTheme
+import com.example.trustwallet.feature.domain.CommandMessage
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun CommandsScreen() {
     val viewModel = koinViewModel<CommandsViewModel>()
     val state by viewModel.state.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                viewModel.onStart()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     CommandsScreenContent(
         state,
         viewModel::onParameter1Change,
@@ -84,7 +108,7 @@ fun CommandsScreenContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Simple Transactional Key Value Store APP",
+                        text = stringResource(R.string.app_title),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -93,6 +117,7 @@ fun CommandsScreenContent(
             )
         },
         bottomBar = {
+            val focusManager = LocalFocusManager.current
             BottomAppBar {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -107,25 +132,28 @@ fun CommandsScreenContent(
                         )
                         Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
                     }
-                    if (viewState.isParameter1Visible)
+                    if (viewState.isParameter1Visible())
                         InputTextField(
                             value = viewState.parameter1,
                             onValueChange = onParameter1Change,
-                            label = "Param 1",
+                            label = stringResource(R.string.param_1),
                             modifier = Modifier.weight(1f)
                         )
-                    if (viewState.isParameter2Visible)
+                    if (viewState.isParameter2Visible())
                         InputTextField(
                             value = viewState.parameter2,
                             onValueChange = onParameter2Change,
-                            label = "Param 2",
+                            label = stringResource(R.string.param_2),
                             modifier = Modifier.weight(1f)
                         )
-                    if (!viewState.isParameter1Visible && !viewState.isParameter2Visible)
+                    if (!viewState.isParameter1Visible() && !viewState.isParameter2Visible())
                         Spacer(modifier = Modifier.weight(1f))
                     FloatingActionButton(
                         elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                        onClick = { onCommandSubmit() },
+                        onClick = {
+                            focusManager.clearFocus()
+                            onCommandSubmit()
+                        },
                         modifier = Modifier
                             .width(48.dp)
                             .aspectRatio(1f, matchHeightConstraintsFirst = true)
@@ -137,15 +165,21 @@ fun CommandsScreenContent(
         },
         modifier = Modifier.imePadding()
     ) { contentPadding ->
+
+        val lazyListState = rememberLazyListState()
+        LaunchedEffect(key1 = viewState.commands) {
+            lazyListState.animateScrollToItem(viewState.commands.size)
+        }
         if (viewState.showCommandMenu) {
             CommandMenuItemDialog(
                 onDismissRequest = { onCommandMenuHide() },
                 onItemChosen = { onCommandMenuItemClicked(it) },
                 items = viewState.availableCommandItems,
-                dialogTitle = "Choose a command"
+                dialogTitle = stringResource(R.string.choose_a_command)
             )
         }
         LazyColumn(
+            state = lazyListState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(8.dp)
@@ -153,8 +187,9 @@ fun CommandsScreenContent(
         ) {
             items(viewState.commands) { command ->
                 CommandItem(
-                    text = command.first,
-                    isUser = command.second,
+                    text = command.text,
+                    isUser = command.isUser,
+                    error = command.error
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -200,7 +235,8 @@ fun CommandItem(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "Error",
+                        // double-bang operator is used here because error is checked in if above
+                        text = error!!,
                         style = MaterialTheme.typography.labelLarge.copy(color = MaterialTheme.colorScheme.error)
                     )
                 }
@@ -292,10 +328,10 @@ private fun Preview() {
         CommandsScreenContent(
             viewState = CommandsViewState().copy(
                 commands = listOf(
-                    "SET test value" to true,
-                    "value" to false,
-                    "BEGIN" to true,
-                    "GET test" to true,
+                    CommandMessage("SET test value", true, null),
+                    CommandMessage("value", false, null),
+                    CommandMessage("BEGIN", true, null),
+                    CommandMessage("GET test", true, "no key found"),
                 ),
                 showCommandMenu = true
             ),
